@@ -97,11 +97,14 @@ MODULE_PARM_DESC(report_key_events, "Forward fan mode key events");
 #define NOTIFY_KBD_BRTTOGGLE		0xc7
 #define NOTIFY_KBD_FBM			0x99
 #define NOTIFY_KBD_TTP			0xae
+#define NOTIFY_KBD_AURA_LFT		0xb2
+#define NOTIFY_KBD_AURA_RGHT		0xb3
 #define NOTIFY_LID_FLIP			0xfa
 
 #define ASUS_WMI_FNLOCK_BIOS_DISABLED	BIT(0)
 
-#define ASUS_FAN_DESC			"cpu_fan"
+#define ASUS_CPU_FAN_DESC			"cpu_fan"
+#define ASUS_GPU_FAN_DESC			"gpu_fan"
 #define ASUS_FAN_MFUN			0x13
 #define ASUS_FAN_SFUN_READ		0x06
 #define ASUS_FAN_SFUN_WRITE		0x07
@@ -280,13 +283,15 @@ struct asus_wmi {
 
 /* WMI ************************************************************************/
 
-static int asus_wmi_evaluate_method3(u32 method_id,
-		u32 arg0, u32 arg1, u32 arg2, u32 *retval)
+static int asus_wmi_evaluate_method5(u32 method_id,
+		u32 arg0, u32 arg1, u32 arg2, u32 arg4, u32 arg5, u32 *retval)
 {
 	struct bios_args args = {
 		.arg0 = arg0,
 		.arg1 = arg1,
 		.arg2 = arg2,
+		.arg4 = arg4,
+		.arg5 = arg5,
 	};
 	struct acpi_buffer input = { (acpi_size) sizeof(args), &args };
 	struct acpi_buffer output = { ACPI_ALLOCATE_BUFFER, NULL };
@@ -313,6 +318,12 @@ static int asus_wmi_evaluate_method3(u32 method_id,
 		return -ENODEV;
 
 	return 0;
+}
+
+static int asus_wmi_evaluate_method3(u32 method_id,
+		u32 arg0, u32 arg1, u32 arg2, u32 *retval)
+{
+	return asus_wmi_evaluate_method5(method_id, arg0, arg1, arg2, 0, 0, retval);
 }
 
 static int asus_wmi_evaluate_method(u32 method_id, u32 arg0, u32 arg1, u32 *retval)
@@ -1822,6 +1833,43 @@ static ssize_t fan1_input_show(struct device *dev,
 	return sprintf(buf, "%d\n", value < 0 ? -1 : value*100);
 }
 
+static ssize_t fan2_input_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+	int value;
+	int ret;
+
+	switch (asus->fan_type) {
+	case FAN_TYPE_SPEC83:
+		ret = asus_wmi_get_devstate(asus, ASUS_WMI_DEVID_GPU_FAN_CTRL,
+					    &value);
+		if (ret < 0)
+			return ret;
+
+		value &= 0xffff;
+		break;
+
+	case FAN_TYPE_AGFN:
+		/* no speed readable on manual mode */
+		if (asus->fan_pwm_mode == ASUS_FAN_CTRL_MANUAL)
+			return -ENXIO;
+
+		ret = asus_agfn_fan_speed_read(asus, 1, &value);
+		if (ret) {
+			pr_warn("reading fan speed failed: %d\n", ret);
+			return -ENXIO;
+		}
+		break;
+
+	default:
+		return -ENXIO;
+	}
+
+	return sprintf(buf, "%d\n", value < 0 ? -1 : value*100);
+}
+
 static ssize_t pwm1_enable_show(struct device *dev,
 						 struct device_attribute *attr,
 						 char *buf)
@@ -1898,7 +1946,14 @@ static ssize_t fan1_label_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
 {
-	return sprintf(buf, "%s\n", ASUS_FAN_DESC);
+	return sprintf(buf, "%s\n", ASUS_CPU_FAN_DESC);
+}
+
+static ssize_t fan2_label_show(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf)
+{
+	return sprintf(buf, "%s\n", ASUS_GPU_FAN_DESC);
 }
 
 static ssize_t asus_hwmon_temp1(struct device *dev,
@@ -1923,6 +1978,10 @@ static DEVICE_ATTR_RW(pwm1_enable);
 static DEVICE_ATTR_RO(fan1_input);
 static DEVICE_ATTR_RO(fan1_label);
 
+/* Fan2 */
+static DEVICE_ATTR_RO(fan2_input);
+static DEVICE_ATTR_RO(fan2_label);
+
 /* Temperature */
 static DEVICE_ATTR(temp1_input, S_IRUGO, asus_hwmon_temp1, NULL);
 
@@ -1931,6 +1990,9 @@ static struct attribute *hwmon_attributes[] = {
 	&dev_attr_pwm1_enable.attr,
 	&dev_attr_fan1_input.attr,
 	&dev_attr_fan1_label.attr,
+	&dev_attr_fan2_input.attr,
+        &dev_attr_fan2_label.attr,
+
 
 	&dev_attr_temp1_input.attr,
 	NULL
@@ -1948,6 +2010,8 @@ static umode_t asus_hwmon_sysfs_is_visible(struct kobject *kobj,
 			return 0;
 	} else if (attr == &dev_attr_fan1_input.attr
 	    || attr == &dev_attr_fan1_label.attr
+	    || attr == &dev_attr_fan2_input.attr
+	    || attr == &dev_attr_fan2_label.attr
 	    || attr == &dev_attr_pwm1_enable.attr) {
 		if (asus->fan_type == FAN_TYPE_NONE)
 			return 0;
@@ -2000,7 +2064,8 @@ static int asus_wmi_fan_init(struct asus_wmi *asus)
 		asus->fan_type = FAN_TYPE_SPEC83;
 	else if (asus_wmi_has_agfn_fan(asus))
 		asus->fan_type = FAN_TYPE_AGFN;
-
+	else
+		asus->fan_type = FAN_TYPE_SPEC83;
 	if (asus->fan_type == FAN_TYPE_NONE)
 		return -ENODEV;
 
@@ -2459,6 +2524,69 @@ static int asus_wmi_get_event_code(u32 value)
 	return code;
 }
 
+static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
+{
+	int color1, color2, color3, red, green, blue;
+	blue = asus->kbbl_rgb.kbbl_blue;
+	green = asus->kbbl_rgb.kbbl_green;
+	red = asus->kbbl_rgb.kbbl_red;
+
+	if (asus->kbbl_rgb.kbbl_mode != 0)
+		asus->kbbl_rgb.kbbl_set_mode = 0;
+	asus->kbbl_rgb.kbbl_set_flags = ;
+
+	if (direction == 1) {
+		color1 = red;
+		color2 = green;
+		color3 = blue;
+	} else {
+		color1 = red;
+		color2 = blue;
+		color3 = green;
+	}
+
+	if (color1 != 255 && color2 != 255 && color3 != 255)
+		asus->kbbl_rgb.kbbl_set_red = 255;
+
+	if (color1 == 255 && color2 < 255 && color3 < 255) {
+		if (color3 != 0) {
+			color3 = color3 - 5;
+		} else {
+			color2 = color2 + 5;
+		}
+	} else if (color2 == 255 && color1 == 255) {
+		color1 = color1 - 5;
+	} else if (color2 == 255 && color1 < 255 && color3 < 255) {
+		if (color1 == 0) {
+			color3 = color3 + 5;
+		} else {
+			color1 = color1 - 5;
+		}
+	} else if (color3 == 255 && color2 == 255) {
+		color2 = color2 - 5;
+	} else if (color3 == 255 && color1 < 255 && color2 < 255) {
+		if (color2 == 0) {
+			color1 = color1 + 5;
+		} else {
+			color2 = color2 - 5;
+		}
+	} else if (color1 == 255 && color3 == 255) {
+		color3 = color3 - 5;
+	}
+
+	if (direction == 1) {
+		asus->kbbl_rgb.kbbl_set_red = color1;
+		asus->kbbl_rgb.kbbl_set_green  = color2;
+		asus->kbbl_rgb.kbbl_set_blue = color3;
+	} else {
+		asus->kbbl_rgb.kbbl_set_red = color1;
+		asus->kbbl_rgb.kbbl_set_green  = color3;
+		asus->kbbl_rgb.kbbl_set_blue = color2;
+	}
+		kbbl_rgb_write(asus, 0);
+		return;
+}
+
 static void asus_wmi_handle_event_code(int code, struct asus_wmi *asus)
 {
 	unsigned int key_value = 1;
@@ -2494,6 +2622,19 @@ static void asus_wmi_handle_event_code(int code, struct asus_wmi *asus)
 		kbd_led_set_by_kbd(asus, asus->kbd_led_wk - 1);
 		return;
 	}
+
+
+	if (code == NOTIFY_KBD_AURA_LFT) {
+		asus_wmi_handle_aura_event(asus, 1);
+		return;
+	}
+	else if (code == NOTIFY_KBD_AURA_RGHT) {
+		asus_wmi_handle_aura_event(asus, 0);
+		return;
+	}
+
+
+
 	if (code == NOTIFY_KBD_BRTTOGGLE) {
 		if (asus->kbd_led_wk == asus->kbd_led.max_brightness)
 			kbd_led_set_by_kbd(asus, 0);
@@ -3405,6 +3546,38 @@ static const struct dmi_system_id atw_dmi_list[] __initconst = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK COMPUTER INC."),
 			DMI_MATCH(DMI_PRODUCT_NAME, "FX505GT"),
+		},
+	},
+	{
+		.callback = dmi_check_callback,
+		.ident = "FA506IV",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK COMPUTER INC."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "FA506IV"),
+		},
+	},
+	{
+		.callback = dmi_check_callback,
+		.ident = "FA506II",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK COMPUTER INC."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "FA506II"),
+		},
+	},
+	{
+		.callback = dmi_check_callback,
+		.ident = "FA506IU",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK COMPUTER INC."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "FA506IU"),
+		},
+	},
+	{
+		.callback = dmi_check_callback,
+		.ident = "FA506IA",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK COMPUTER INC."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "FA506IA"),
 		},
 	},
 	{
