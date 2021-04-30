@@ -42,6 +42,7 @@ It is a backport of the asus-wmi / asus-nb-wmi drivers from the mainline + RGB b
 |FA706II                 |FA706II.304 |?                      |?                           |1 (#62)
 |FA706IU                 |FA706IU.315 |?                      |5.11.8-051108-generic       |1, 2 (#62)
 |FX506LI                 |FX506LI.304 |Ubuntu 20.04           |5.4.0-70-generic            |1, 2 (#63)
+|FA506IV                 |FA506IV.316 |Void Linux             |5.12.0-tkg-MuQSS_22         |
 
 Notes:
 
