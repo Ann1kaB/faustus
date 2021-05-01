@@ -206,6 +206,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_blue;
 	u8 kbbl_mode;
 	u8 kbbl_speed;
+	u8 kbbl_aura;
 
 	u8 kbbl_set_red;
 	u8 kbbl_set_green;
@@ -213,6 +214,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_set_mode;
 	u8 kbbl_set_speed;
 	u8 kbbl_set_flags;
+	u8 kbbl_set_aura;
 };
 
 enum fan_type {
@@ -948,6 +950,23 @@ static ssize_t kbbl_mode_store(struct device *dev,
 	return store_u8(&asus->kbbl_rgb.kbbl_set_mode, buf, count);
 }
 
+
+static ssize_t kbbl_aura_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+
+	return show_u8(asus->kbbl_rgb.kbbl_aura, buf);
+}
+
+static ssize_t kbbl_aura_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+
+	return store_u8(&asus->kbbl_rgb.kbbl_set_aura, buf, count);
+}
+
 static ssize_t kbbl_speed_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1118,6 +1137,9 @@ static DEVICE_ATTR_RW(kbbl_flags);
 /* Write data: 1 - permanently, 2 - temporarily (reset after reboot) */
 static DEVICE_ATTR_RW(kbbl_set);
 
+/* Speed for aura keys color change */
+static DEVICE_ATTR_RW(kbbl_aura);
+
 static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_red.attr,
 	&dev_attr_kbbl_green.attr,
@@ -1126,6 +1148,7 @@ static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_speed.attr,
 	&dev_attr_kbbl_flags.attr,
 	&dev_attr_kbbl_set.attr,
+	&dev_attr_kbbl_aura.attr,
 	NULL,
 };
 
@@ -2526,62 +2549,82 @@ static int asus_wmi_get_event_code(u32 value)
 
 static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 {
-	int color1, color2, color3, red, green, blue;
-	blue = asus->kbbl_rgb.kbbl_blue;
-	green = asus->kbbl_rgb.kbbl_green;
-	red = asus->kbbl_rgb.kbbl_red;
+	int color1, color2, color3, speed;
+	
+	speed = asus->kbbl_rgb.kbbl_set_aura;
+	if (!speed)
+		speed = 5;
 
-	if (direction == 1) {
-		color1 = red;
-		color2 = green;
-		color3 = blue;
+	if (direction) {
+		color1 = asus->kbbl_rgb.kbbl_red;
+		color2 = asus->kbbl_rgb.kbbl_green;
+		color3 = asus->kbbl_rgb.kbbl_blue;
 	} else {
-		color1 = red;
-		color2 = blue;
-		color3 = green;
+		color1 = asus->kbbl_rgb.kbbl_red;
+		color2 = asus->kbbl_rgb.kbbl_blue;
+		color3 = asus->kbbl_rgb.kbbl_green;
 	}
 
-	if (color1 == 255 && color2 < 255 && color3 < 255) {
-		if (color3 != 0) {
-			color3 -= 5;
+	if (color1==255 && color2<255 && color3<255) {
+		pr_info("color1");
+		if (color3!=0 && color3-speed>=0) {
+			color3-=speed;
+		} else if (color2+speed <= 255) {
+			color2+=speed;
 		} else {
-			color2 += 5;
+			color3 = 0;
+			if (color2 != 0)
+				color2 = 255;
 		}
-	} else if (color2 == 255 && color1 == 255) {
-		color1 -= 5;
-	} else if (color2 == 255 && color1 < 255 && color3 < 255) {
-		if (color1 == 0) {
-			color3 += 5;
+	} else if (color2==255 && color1==255) {
+		color1 -= speed;
+	} else if (color2==255 && color1<255 && color3<255) {
+		pr_info("color2");
+		if (color1==0 && color3+speed<=255) {
+			color3+=speed;
+		} else if (color1-speed >= 0) {
+			color1-=speed;
 		} else {
-			color1 -= 5;
+			color1 = 0;
+			if (color3 != 0)
+				color3 = 255;
 		}
-	} else if (color3 == 255 && color2 == 255) {
-		color2 = color2 - 5;
-	} else if (color3 == 255 && color1 < 255 && color2 < 255) {
-		if (color2 == 0) {
-			color1 += 5;
+	} else if (color3==255 && color2==255) {
+		color2-=speed;
+	} else if (color3==255 && color1<255 && color2 < 255) {
+		pr_info("color3");
+		if (color2 == 0 && color1+speed<=255) {
+			color1+=speed;
+		} else if (color2-speed>=0) {
+			color2-=speed;
 		} else {
-			color2 -= 5;
+			color2 = 0;
+			if (color1 != 0)
+				color1 = 255;
 		}
-	} else if (color1 == 255 && color3 == 255) {
-		color3 -= 5;
+	} else if (color1== 255 && color3 == 255) {
+		color3 -= speed;
 	}
 
-	if (direction == 1) {
+	if (direction) {
 		asus->kbbl_rgb.kbbl_set_red = color1;
 		asus->kbbl_rgb.kbbl_set_green  = color2;
 		asus->kbbl_rgb.kbbl_set_blue = color3;
+		//pr_info("RED: %d GREEN: %d BLUE: %d", color1, color2, color3);
 	} else {
 		asus->kbbl_rgb.kbbl_set_red = color1;
-		asus->kbbl_rgb.kbbl_set_green  = color3;
-		asus->kbbl_rgb.kbbl_set_blue = color2;
+		asus->kbbl_rgb.kbbl_set_blue  = color2;
+		asus->kbbl_rgb.kbbl_set_green = color3;
+		//pr_info("RED: %d GREEN: %d BLUE: %d", color1, color3, color2);
 	}
 
-	if (asus->kbbl_rgb.kbbl_mode != 0 || asus->kbbl_rgb.kbbl_set_flags != 42) {
-		asus->kbbl_rgb.kbbl_set_mode = 0;
-		asus->kbbl_rgb.kbbl_set_flags = 42;
-		asus->kbbl_rgb.kbbl_set_red = 255;
+	if (asus->kbbl_rgb.kbbl_set_flags != 42) {
+		asus->kbbl_rgb.kbbl_set_flags = 42; // 2a
+		asus->kbbl_rgb.kbbl_set_red = 255; // initializaton
 	}
+	asus->kbbl_rgb.kbbl_set_mode = 
+		(asus->kbbl_rgb.kbbl_mode != 2) ? asus->kbbl_rgb.kbbl_mode : 0;
+	asus->kbbl_rgb.kbbl_aura = asus->kbbl_rgb.kbbl_set_aura;
 	kbbl_rgb_write(asus, 1);
 	return;
 }
@@ -2627,12 +2670,10 @@ static void asus_wmi_handle_event_code(int code, struct asus_wmi *asus)
 		asus_wmi_handle_aura_event(asus, 1);
 		return;
 	}
-	else if (code == NOTIFY_KBD_AURA_RGHT) {
+	if (code == NOTIFY_KBD_AURA_RGHT) {
 		asus_wmi_handle_aura_event(asus, 0);
 		return;
 	}
-
-
 
 	if (code == NOTIFY_KBD_BRTTOGGLE) {
 		if (asus->kbd_led_wk == asus->kbd_led.max_brightness)

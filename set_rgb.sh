@@ -14,3 +14,5 @@ echo 0 > /sys/devices/platform/faustus/kbbl/kbbl_speed
 echo 2a > /sys/devices/platform/faustus/kbbl/kbbl_flags
 # Save: 1 - permanently, 2 - temporarily (reset after reboot)
 echo 1 > /sys/devices/platform/faustus/kbbl/kbbl_set
+# Speed for aura keys color change
+echo 5 > /sys/devices/platform/faustus/kbbl/kbbl_set_aura_speed
