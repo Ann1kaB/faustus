@@ -2531,10 +2531,6 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 	green = asus->kbbl_rgb.kbbl_green;
 	red = asus->kbbl_rgb.kbbl_red;
 
-	if (asus->kbbl_rgb.kbbl_mode != 0)
-		asus->kbbl_rgb.kbbl_set_mode = 0;
-	asus->kbbl_rgb.kbbl_set_flags = ;
-
 	if (direction == 1) {
 		color1 = red;
 		color2 = green;
@@ -2545,33 +2541,30 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		color3 = green;
 	}
 
-	if (color1 != 255 && color2 != 255 && color3 != 255)
-		asus->kbbl_rgb.kbbl_set_red = 255;
-
 	if (color1 == 255 && color2 < 255 && color3 < 255) {
 		if (color3 != 0) {
-			color3 = color3 - 5;
+			color3 -= 5;
 		} else {
-			color2 = color2 + 5;
+			color2 += 5;
 		}
 	} else if (color2 == 255 && color1 == 255) {
-		color1 = color1 - 5;
+		color1 -= 5;
 	} else if (color2 == 255 && color1 < 255 && color3 < 255) {
 		if (color1 == 0) {
-			color3 = color3 + 5;
+			color3 += 5;
 		} else {
-			color1 = color1 - 5;
+			color1 -= 5;
 		}
 	} else if (color3 == 255 && color2 == 255) {
 		color2 = color2 - 5;
 	} else if (color3 == 255 && color1 < 255 && color2 < 255) {
 		if (color2 == 0) {
-			color1 = color1 + 5;
+			color1 += 5;
 		} else {
-			color2 = color2 - 5;
+			color2 -= 5;
 		}
 	} else if (color1 == 255 && color3 == 255) {
-		color3 = color3 - 5;
+		color3 -= 5;
 	}
 
 	if (direction == 1) {
@@ -2583,8 +2576,14 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		asus->kbbl_rgb.kbbl_set_green  = color3;
 		asus->kbbl_rgb.kbbl_set_blue = color2;
 	}
-		kbbl_rgb_write(asus, 0);
-		return;
+
+	if (asus->kbbl_rgb.kbbl_mode != 0 || asus->kbbl_rgb.kbbl_set_flags != 42) {
+		asus->kbbl_rgb.kbbl_set_mode = 0;
+		asus->kbbl_rgb.kbbl_set_flags = 42;
+		asus->kbbl_rgb.kbbl_set_red = 255;
+	}
+	kbbl_rgb_write(asus, 1);
+	return;
 }
 
 static void asus_wmi_handle_event_code(int code, struct asus_wmi *asus)
