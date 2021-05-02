@@ -16,3 +16,6 @@ echo 2a > /sys/devices/platform/faustus/kbbl/kbbl_flags
 echo 1 > /sys/devices/platform/faustus/kbbl/kbbl_set
 # Speed for aura keys color change
 echo 5 > /sys/devices/platform/faustus/kbbl/kbbl_set_aura_speed
+# White balance mode for aura keys: 0 - disable, 1 - enable
+echo 0 > /sys/devices/platform/faustus/kbbl/kbbl_set_aura_speed
+

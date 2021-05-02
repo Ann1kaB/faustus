@@ -207,6 +207,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_mode;
 	u8 kbbl_speed;
 	u8 kbbl_aura;
+	u8 kbbl_aurawb;
 
 	u8 kbbl_set_red;
 	u8 kbbl_set_green;
@@ -215,6 +216,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_set_speed;
 	u8 kbbl_set_flags;
 	u8 kbbl_set_aura;
+	u8 kbbl_set_aurawb;
 };
 
 enum fan_type {
@@ -967,6 +969,22 @@ static ssize_t kbbl_aura_store(struct device *dev,
 	return store_u8(&asus->kbbl_rgb.kbbl_set_aura, buf, count);
 }
 
+static ssize_t kbbl_aurawb_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+
+	return show_u8(asus->kbbl_rgb.kbbl_aurawb, buf);
+}
+
+static ssize_t kbbl_aurawb_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+
+	return store_u8(&asus->kbbl_rgb.kbbl_set_aurawb, buf, count);
+}
+
 static ssize_t kbbl_speed_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1140,6 +1158,9 @@ static DEVICE_ATTR_RW(kbbl_set);
 /* Speed for aura keys color change */
 static DEVICE_ATTR_RW(kbbl_aura);
 
+/* Set white balance mode for aura keys*/
+static DEVICE_ATTR_RW(kbbl_aurawb);
+
 static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_red.attr,
 	&dev_attr_kbbl_green.attr,
@@ -1149,6 +1170,7 @@ static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_flags.attr,
 	&dev_attr_kbbl_set.attr,
 	&dev_attr_kbbl_aura.attr,
+	&dev_attr_kbbl_aurawb.attr,
 	NULL,
 };
 
@@ -2552,6 +2574,7 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 	int color1, color2, color3, speed;
 	
 	speed = asus->kbbl_rgb.kbbl_set_aura;
+	asus->kbbl_rgb.kbbl_aurawb = (asus->kbbl_rgb.kbbl_set_aurawb == 1) ? 1 : 0;
 	if (!speed)
 		speed = 5;
 
@@ -2565,7 +2588,38 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		color3 = asus->kbbl_rgb.kbbl_green;
 	}
 
-	if (color1==255 && color2<255 && color3<255) {
+	if (asus->kbbl_rgb.kbbl_aurawb) {
+		//pr_info("aurawb");
+		if (!direction) {
+			if (color1 != 255 && color2 != 255 && color1+speed <= 255 && color2+speed <= 255) {
+				color1+=speed;
+				color2+=speed;
+			} else if (color2 != 255 && color3 != 255 && color2+speed <= 255 && color3+speed <= 255) {
+				color2+=speed;
+				color3+=speed;
+			} else if (color1 != 255 && color3 != 255 && color1+speed <= 255 && color3+speed <= 255) {
+				color1+=speed;
+				color3+=speed;
+			} else if (color2 == 255 && color3 == 255 && color1+speed != 255) {
+				color1+=speed;
+			} else if (color1 == 255 && color3 == 255 && color2+speed != 255) {
+				color2+=speed;
+			} else if (color1 == 255 && color2 == 255 && color3+speed != 255) {
+				color3+=speed;
+			}
+		}
+		if ((direction) && color1 != 0 && color2 != 0 && color3 != 0) {
+			if (color1 != 255)
+				color1-=speed;
+			if (color2 != 255)
+				color2-=speed;
+			if (color3 != 255)
+				color3-=speed;
+		}  else if (color1 == color2 && color2 == color3) {
+			color1-=5; // let's just change 2 values...
+			color2-=5;
+		}
+	} else if (color1==255 && color2<255 && color3<255) {
 		pr_info("color1");
 		if (color3!=0 && color3-speed>=0) {
 			color3-=speed;
