@@ -44,11 +44,6 @@ It is a backport of the asus-wmi / asus-nb-wmi drivers from the mainline + RGB b
 |FX506LI                 |FX506LI.304 |Ubuntu 20.04           |5.4.0-70-generic            |1, 2 (#63)
 |FA506IV                 |FA506IV.316 |Void Linux             |5.12.0-tkg-MuQSS_22         |
 
-Notes:
-
-1. Fan mode control is not supported.
-2. RGB hot keys (Fn-Left, Fn-Right) are not functional.
-
 See "Contributing" section for other versions.
 
 To check your exact model run
@@ -213,6 +208,8 @@ The list of settings is:
   - 08 - awake 
   - 20 - sleep 
   - 80? - should be logically shutdown, but I have genuinely no idea what it does
+* `kbbl_auraspeed` - Speed of color cycling [0-99]
+* `kbbl_aurawb` - White balance mode for aura keys, enable with 1, disable with 0
 
 ### Fan mode
 

@@ -207,7 +207,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_blue;
 	u8 kbbl_mode;
 	u8 kbbl_speed;
-	u8 kbbl_aura;
+	u8 kbbl_auraspeed;
 	u8 kbbl_aurawb;
 
 	u8 kbbl_set_red;
@@ -216,7 +216,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_set_mode;
 	u8 kbbl_set_speed;
 	u8 kbbl_set_flags;
-	u8 kbbl_set_aura;
+	u8 kbbl_set_auraspeed;
 	u8 kbbl_set_aurawb;
 };
 
@@ -955,20 +955,20 @@ static ssize_t kbbl_mode_store(struct device *dev,
 }
 
 
-static ssize_t kbbl_aura_show(struct device *dev, struct device_attribute *attr,
+static ssize_t kbbl_auraspeed_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
 	struct asus_wmi *asus = dev_get_drvdata(dev);
 
-	return show_u8(asus->kbbl_rgb.kbbl_aura, buf);
+	return show_u8(asus->kbbl_rgb.kbbl_auraspeed, buf);
 }
 
-static ssize_t kbbl_aura_store(struct device *dev,
+static ssize_t kbbl_auraspeed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct asus_wmi *asus = dev_get_drvdata(dev);
 
-	return store_u8(&asus->kbbl_rgb.kbbl_set_aura, buf, count);
+	return store_u8(&asus->kbbl_rgb.kbbl_set_auraspeed, buf, count);
 }
 
 static ssize_t kbbl_aurawb_show(struct device *dev, struct device_attribute *attr,
@@ -1158,7 +1158,7 @@ static DEVICE_ATTR_RW(kbbl_flags);
 static DEVICE_ATTR_RW(kbbl_set);
 
 /* Speed for aura keys color change */
-static DEVICE_ATTR_RW(kbbl_aura);
+static DEVICE_ATTR_RW(kbbl_auraspeed);
 
 /* Set white balance mode for aura keys*/
 static DEVICE_ATTR_RW(kbbl_aurawb);
@@ -1171,7 +1171,7 @@ static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_speed.attr,
 	&dev_attr_kbbl_flags.attr,
 	&dev_attr_kbbl_set.attr,
-	&dev_attr_kbbl_aura.attr,
+	&dev_attr_kbbl_auraspeed.attr,
 	&dev_attr_kbbl_aurawb.attr,
 	NULL,
 };
@@ -2575,7 +2575,7 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 {
 	int color1, color2, color3, speed;
 	
-	speed = (asus->kbbl_rgb.kbbl_aura) ? asus->kbbl_rgb.kbbl_aura : 5; // default to 5
+	speed = (asus->kbbl_rgb.kbbl_auraspeed) ? asus->kbbl_rgb.kbbl_auraspeed : 5; // default to 5
 	asus->kbbl_rgb.kbbl_aurawb = (asus->kbbl_rgb.kbbl_set_aurawb == 1) ? 1 : 0;
 
 	if (direction) { // LEFT
@@ -2678,7 +2678,7 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 	}
 	asus->kbbl_rgb.kbbl_set_mode = (asus->kbbl_rgb.kbbl_mode != 2) ?
 		asus->kbbl_rgb.kbbl_mode : 0;
-	asus->kbbl_rgb.kbbl_aura = asus->kbbl_rgb.kbbl_set_aura;
+	asus->kbbl_rgb.kbbl_auraspeed = asus->kbbl_rgb.kbbl_set_auraspeed;
 	kbbl_rgb_write(asus, 1);
 	return;
 }
@@ -3701,7 +3701,6 @@ static const struct dmi_system_id atw_dmi_list[] __initconst = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "FX506LI"),
 		},
 	},
-	{}
 };
 
 static int __init atw_init(void)
