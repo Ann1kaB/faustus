@@ -208,7 +208,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_mode;
 	u8 kbbl_speed;
 	u8 kbbl_auraspeed;
-	u8 kbbl_aurawb;
+	u8 kbbl_auramode;
 
 	u8 kbbl_set_red;
 	u8 kbbl_set_green;
@@ -217,7 +217,7 @@ struct asus_kbbl_rgb {
 	u8 kbbl_set_speed;
 	u8 kbbl_set_flags;
 	u8 kbbl_set_auraspeed;
-	u8 kbbl_set_aurawb;
+	u8 kbbl_set_auramode;
 };
 
 enum fan_type {
@@ -954,6 +954,21 @@ static ssize_t kbbl_mode_store(struct device *dev,
 	return store_u8(&asus->kbbl_rgb.kbbl_set_mode, buf, count);
 }
 
+static ssize_t kbbl_auramode_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+
+	return show_u8(asus->kbbl_rgb.kbbl_auramode, buf);
+}
+
+static ssize_t kbbl_auramode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct asus_wmi *asus = dev_get_drvdata(dev);
+
+	return store_u8(&asus->kbbl_rgb.kbbl_set_auramode, buf, count);
+}
 
 static ssize_t kbbl_auraspeed_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
@@ -969,22 +984,6 @@ static ssize_t kbbl_auraspeed_store(struct device *dev,
 	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	return store_u8(&asus->kbbl_rgb.kbbl_set_auraspeed, buf, count);
-}
-
-static ssize_t kbbl_aurawb_show(struct device *dev, struct device_attribute *attr,
-		char *buf)
-{
-	struct asus_wmi *asus = dev_get_drvdata(dev);
-
-	return show_u8(asus->kbbl_rgb.kbbl_aurawb, buf);
-}
-
-static ssize_t kbbl_aurawb_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct asus_wmi *asus = dev_get_drvdata(dev);
-
-	return store_u8(&asus->kbbl_rgb.kbbl_set_aurawb, buf, count);
 }
 
 static ssize_t kbbl_speed_show(struct device *dev,
@@ -1157,11 +1156,12 @@ static DEVICE_ATTR_RW(kbbl_flags);
 /* Write data: 1 - permanently, 2 - temporarily (reset after reboot) */
 static DEVICE_ATTR_RW(kbbl_set);
 
-/* Speed for aura keys color change */
+/* Speed for aura hotkeys color change */
 static DEVICE_ATTR_RW(kbbl_auraspeed);
 
-/* Set white balance mode for aura keys*/
-static DEVICE_ATTR_RW(kbbl_aurawb);
+/* Set mode switching for aura hotkeys: 0 - color cycle, 1 - color mode selection, 
+ * 2 - speed for modes, 3 - white balance */
+static DEVICE_ATTR_RW(kbbl_auramode);
 
 static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_red.attr,
@@ -1172,7 +1172,7 @@ static struct attribute *rgbkb_sysfs_attributes[] = {
 	&dev_attr_kbbl_flags.attr,
 	&dev_attr_kbbl_set.attr,
 	&dev_attr_kbbl_auraspeed.attr,
-	&dev_attr_kbbl_aurawb.attr,
+	&dev_attr_kbbl_auramode.attr,
 	NULL,
 };
 
@@ -2575,8 +2575,35 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 {
 	int color1, color2, color3, speed;
 	
-	speed = (asus->kbbl_rgb.kbbl_auraspeed) ? asus->kbbl_rgb.kbbl_auraspeed : 5; // default to 5
-	asus->kbbl_rgb.kbbl_aurawb = (asus->kbbl_rgb.kbbl_set_aurawb == 1) ? 1 : 0;
+	speed = (asus->kbbl_rgb.kbbl_auraspeed)? asus->kbbl_rgb.kbbl_auraspeed : 5; // default to 5
+	asus->kbbl_rgb.kbbl_auramode = (asus->kbbl_rgb.kbbl_set_auramode <= 3)?
+		asus->kbbl_rgb.kbbl_set_auramode : 0;
+
+	if (asus->kbbl_rgb.kbbl_auramode == 2) {
+		if (!direction && asus->kbbl_rgb.kbbl_speed+1 <= 2) {
+			asus->kbbl_rgb.kbbl_set_speed = asus->kbbl_rgb.kbbl_speed+=1;
+		} else if (!direction) {
+			asus->kbbl_rgb.kbbl_set_speed = 0;
+		}
+		if (direction && asus->kbbl_rgb.kbbl_speed-1 >= 0) {
+			asus->kbbl_rgb.kbbl_set_speed = asus->kbbl_rgb.kbbl_speed-=1;
+		} else if (direction) {
+			asus->kbbl_rgb.kbbl_set_speed = 2;
+		}
+	}
+
+	if (asus->kbbl_rgb.kbbl_auramode == 1) {
+		if (!direction && asus->kbbl_rgb.kbbl_mode+1 <= 3) {
+			asus->kbbl_rgb.kbbl_set_mode = asus->kbbl_rgb.kbbl_mode+=1;
+		} else if (!direction) {
+			asus->kbbl_rgb.kbbl_set_mode = 0;
+		}
+		if (direction && asus->kbbl_rgb.kbbl_mode-1 >= 0) {
+			asus->kbbl_rgb.kbbl_set_mode = asus->kbbl_rgb.kbbl_mode-=1;
+		} else if (direction) {
+			asus->kbbl_rgb.kbbl_set_mode = 3;
+		}
+	}		
 
 	if (direction) { // LEFT
 		color1 = asus->kbbl_rgb.kbbl_red;
@@ -2588,8 +2615,9 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		color3 = asus->kbbl_rgb.kbbl_green;
 	}
 
-	if (asus->kbbl_rgb.kbbl_aurawb) {
-		//pr_info("aurawb");
+	if (asus->kbbl_rgb.kbbl_auramode == 3) {
+		if (asus->kbbl_rgb.kbbl_mode == 2) // Don't run manual color cycle if keyboard mode is auto color cycle
+			return;
 		if (!direction) {
 			if (color1 != 255 && color2 != 255 && color1+speed <= 255 && color2+speed <= 255) {
 				color1+=speed;
@@ -2619,53 +2647,55 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 			color1-=5; // let's just change 2 values...
 			color2-=5;
 		}
-	} else if (color1==255 && color2<255 && color3<255) {
-		//pr_info("color1");
-		if (color3!=0 && color3-speed>=0) {
-			color3-=speed;
-		} else if (color2+speed <= 255) {
-			color2+=speed;
-		} else {
-			color3 = 0;
-			if (color2 != 0)
-				color2 = 255;
-		}
-	} else if (color2==255 && color1==255) {
-		color1 -= speed;
-	} else if (color2==255 && color1<255 && color3<255) {
-		//pr_info("color2");
-		if (color1==0 && color3+speed<=255) {
-			color3+=speed;
-		} else if (color1-speed >= 0) {
-			color1-=speed;
-		} else {
-			color1 = 0;
-			if (color3 != 0)
-				color3 = 255;
-		}
-	} else if (color3==255 && color2==255) {
-		color2-=speed;
-	} else if (color3==255 && color1<255 && color2 < 255) {
-		//pr_info("color3");
-		if (color2 == 0 && color1+speed<=255) {
-			color1+=speed;
-		} else if (color2-speed>=0) {
+
+	} else if (!asus->kbbl_rgb.kbbl_auramode) {
+		if (asus->kbbl_rgb.kbbl_mode == 2) // Don't run manual color cycle if keyboard mode is auto color cycle
+			return;
+		if (color1==255 && color2<255 && color3<255) {
+			if (color3!=0 && color3-speed>=0) {
+				color3-=speed;
+			} else if (color2+speed <= 255) {
+				color2+=speed;
+			} else {
+				color3 = 0;
+				if (color2 != 0)
+					color2 = 255;
+			}
+		} else if (color2==255 && color1==255) {
+			color1 -= speed;
+		} else if (color2==255 && color1<255 && color3<255) {
+			if (color1==0 && color3+speed<=255) {
+				color3+=speed;
+			} else if (color1-speed >= 0) {
+				color1-=speed;
+			} else {
+				color1 = 0;
+				if (color3 != 0)
+					color3 = 255;
+			}
+		} else if (color3==255 && color2==255) {
 			color2-=speed;
-		} else {
-			color2 = 0;
-			if (color1 != 0)
-				color1 = 255;
+		} else if (color3==255 && color1<255 && color2 < 255) {
+			if (color2 == 0 && color1+speed<=255) {
+				color1+=speed;
+			} else if (color2-speed>=0) {
+				color2-=speed;
+			} else {
+				color2 = 0;
+				if (color1 != 0)
+					color1 = 255;
+			}
+		} else if (color1== 255 && color3 == 255) {
+			color3 -= speed;
 		}
-	} else if (color1== 255 && color3 == 255) {
-		color3 -= speed;
 	}
 
-	if (direction) {
+	if (direction && !asus->kbbl_rgb.kbbl_auramode) {
 		asus->kbbl_rgb.kbbl_set_red = color1;
 		asus->kbbl_rgb.kbbl_set_green  = color2;
 		asus->kbbl_rgb.kbbl_set_blue = color3;
 		//pr_info("RED: %d GREEN: %d BLUE: %d", color1, color2, color3);
-	} else {
+	} else if (!asus->kbbl_rgb.kbbl_auramode) {
 		asus->kbbl_rgb.kbbl_set_red = color1;
 		asus->kbbl_rgb.kbbl_set_blue  = color2;
 		asus->kbbl_rgb.kbbl_set_green = color3;
@@ -2676,9 +2706,8 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		asus->kbbl_rgb.kbbl_set_flags = 42; // default to 2a...
 		asus->kbbl_rgb.kbbl_set_red = 255; // initializaton
 	}
-	asus->kbbl_rgb.kbbl_set_mode = (asus->kbbl_rgb.kbbl_mode != 2) ?
-		asus->kbbl_rgb.kbbl_mode : 0;
 	asus->kbbl_rgb.kbbl_auraspeed = asus->kbbl_rgb.kbbl_set_auraspeed;
+	asus->kbbl_rgb.kbbl_auramode = asus->kbbl_rgb.kbbl_set_auramode;
 	kbbl_rgb_write(asus, 1);
 	return;
 }

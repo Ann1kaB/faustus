@@ -208,8 +208,12 @@ The list of settings is:
   - 08 - awake 
   - 20 - sleep 
   - 80? - should be logically shutdown, but I have genuinely no idea what it does
-* `kbbl_auraspeed` - Speed of color cycling [0-99]
-* `kbbl_aurawb` - White balance mode for aura keys, enable with 1, disable with 0
+* `kbbl_auraspeed` - Speed of manual color cycling [0-99]
+* `kbbl_auramode` - Set modes for aura hotkeys:
+- 0 - manual color cycle
+- 1 - mode of keyboard
+- 2 - speed of keyboard mode
+- 3 - saturation mode of manual color cycle
 
 ### Fan mode
 
