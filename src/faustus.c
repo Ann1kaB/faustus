@@ -91,6 +91,7 @@ MODULE_PARM_DESC(report_key_events, "Forward fan mode key events");
 #define NOTIFY_BRNDOWN_MIN		0x20
 #define NOTIFY_BRNDOWN_MAX		0x2e
 #define NOTIFY_FNLOCK_TOGGLE		0x4e
+#define NOTIFY_WNDWSLOCK_TOGGLE		0x4f
 #define NOTIFY_KBD_DOCK_CHANGE		0x75
 #define NOTIFY_KBD_BRTUP		0xc4
 #define NOTIFY_KBD_BRTDWN		0xc5
@@ -279,6 +280,7 @@ struct asus_wmi {
 	struct work_struct hotplug_work;
 
 	bool fnlock_locked;
+	bool wndwslock_locked;
 
 	struct asus_wmi_debug debug;
 
@@ -2573,16 +2575,14 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 {
 	int color1, color2, color3, speed;
 	
-	speed = asus->kbbl_rgb.kbbl_set_aura;
+	speed = (asus->kbbl_rgb.kbbl_aura) ? asus->kbbl_rgb.kbbl_aura : 5; // default to 5
 	asus->kbbl_rgb.kbbl_aurawb = (asus->kbbl_rgb.kbbl_set_aurawb == 1) ? 1 : 0;
-	if (!speed)
-		speed = 5;
 
-	if (direction) {
+	if (direction) { // LEFT
 		color1 = asus->kbbl_rgb.kbbl_red;
 		color2 = asus->kbbl_rgb.kbbl_green;
 		color3 = asus->kbbl_rgb.kbbl_blue;
-	} else {
+	} else { // RIGHT
 		color1 = asus->kbbl_rgb.kbbl_red;
 		color2 = asus->kbbl_rgb.kbbl_blue;
 		color3 = asus->kbbl_rgb.kbbl_green;
@@ -2620,7 +2620,7 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 			color2-=5;
 		}
 	} else if (color1==255 && color2<255 && color3<255) {
-		pr_info("color1");
+		//pr_info("color1");
 		if (color3!=0 && color3-speed>=0) {
 			color3-=speed;
 		} else if (color2+speed <= 255) {
@@ -2633,7 +2633,7 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 	} else if (color2==255 && color1==255) {
 		color1 -= speed;
 	} else if (color2==255 && color1<255 && color3<255) {
-		pr_info("color2");
+		//pr_info("color2");
 		if (color1==0 && color3+speed<=255) {
 			color3+=speed;
 		} else if (color1-speed >= 0) {
@@ -2646,7 +2646,7 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 	} else if (color3==255 && color2==255) {
 		color2-=speed;
 	} else if (color3==255 && color1<255 && color2 < 255) {
-		pr_info("color3");
+		//pr_info("color3");
 		if (color2 == 0 && color1+speed<=255) {
 			color1+=speed;
 		} else if (color2-speed>=0) {
@@ -2672,12 +2672,12 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		//pr_info("RED: %d GREEN: %d BLUE: %d", color1, color3, color2);
 	}
 
-	if (asus->kbbl_rgb.kbbl_set_flags != 42) {
-		asus->kbbl_rgb.kbbl_set_flags = 42; // 2a
+	if (!asus->kbbl_rgb.kbbl_set_flags) {
+		asus->kbbl_rgb.kbbl_set_flags = 42; // default to 2a...
 		asus->kbbl_rgb.kbbl_set_red = 255; // initializaton
 	}
-	asus->kbbl_rgb.kbbl_set_mode = 
-		(asus->kbbl_rgb.kbbl_mode != 2) ? asus->kbbl_rgb.kbbl_mode : 0;
+	asus->kbbl_rgb.kbbl_set_mode = (asus->kbbl_rgb.kbbl_mode != 2) ?
+		asus->kbbl_rgb.kbbl_mode : 0;
 	asus->kbbl_rgb.kbbl_aura = asus->kbbl_rgb.kbbl_set_aura;
 	kbbl_rgb_write(asus, 1);
 	return;
@@ -2741,6 +2741,9 @@ static void asus_wmi_handle_event_code(int code, struct asus_wmi *asus)
 		asus->fnlock_locked = !asus->fnlock_locked;
 		asus_wmi_fnlock_update(asus);
 		return;
+	}
+	if (code == NOTIFY_WNDWSLOCK_TOGGLE) {
+		return; // TODO: figure out the DEVID for this...
 	}
 
 	if (asus->driver->quirks->use_kbd_dock_devid && code == NOTIFY_KBD_DOCK_CHANGE) {
