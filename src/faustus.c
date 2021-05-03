@@ -1107,6 +1107,10 @@ static int kbbl_rgb_write(struct asus_wmi *asus, int persistent)
 	asus->kbbl_rgb.kbbl_blue = asus->kbbl_rgb.kbbl_set_blue;
 	asus->kbbl_rgb.kbbl_mode = mode;
 	asus->kbbl_rgb.kbbl_speed = speed;
+	asus->kbbl_rgb.kbbl_auraspeed = asus->kbbl_rgb.kbbl_set_auraspeed;
+	//asus->kbbl_rgb.kbbl_auramode = asus->kbbl_rgb.kbbl_set_auramode;
+	asus->kbbl_rgb.kbbl_auramode = (asus->kbbl_rgb.kbbl_set_auramode <= 3)?
+		asus->kbbl_rgb.kbbl_set_auramode : 0;
 
 	return 0;
 }
@@ -2690,12 +2694,14 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		}
 	}
 
-	if (direction && !asus->kbbl_rgb.kbbl_auramode) {
+	if (direction && (!asus->kbbl_rgb.kbbl_auramode
+			|| asus->kbbl_rgb.kbbl_auramode == 3)) {
 		asus->kbbl_rgb.kbbl_set_red = color1;
 		asus->kbbl_rgb.kbbl_set_green  = color2;
 		asus->kbbl_rgb.kbbl_set_blue = color3;
 		//pr_info("RED: %d GREEN: %d BLUE: %d", color1, color2, color3);
-	} else if (!asus->kbbl_rgb.kbbl_auramode) {
+	} else if (!direction && (!asus->kbbl_rgb.kbbl_auramode
+			|| asus->kbbl_rgb.kbbl_auramode == 3)) {
 		asus->kbbl_rgb.kbbl_set_red = color1;
 		asus->kbbl_rgb.kbbl_set_blue  = color2;
 		asus->kbbl_rgb.kbbl_set_green = color3;
@@ -2706,8 +2712,6 @@ static void asus_wmi_handle_aura_event(struct asus_wmi *asus, int direction)
 		asus->kbbl_rgb.kbbl_set_flags = 42; // default to 2a...
 		asus->kbbl_rgb.kbbl_set_red = 255; // initializaton
 	}
-	asus->kbbl_rgb.kbbl_auraspeed = asus->kbbl_rgb.kbbl_set_auraspeed;
-	asus->kbbl_rgb.kbbl_auramode = asus->kbbl_rgb.kbbl_set_auramode;
 	kbbl_rgb_write(asus, 1);
 	return;
 }
